@@ -1,0 +1,56 @@
+@startuml
+!include definitions/USER.puml
+!include definitions/DB.puml
+!include definitions/FRONT.puml
+!include definitions/SPOTIFY.puml
+!include definitions/BACK.puml
+
+USER -> BACK: requests for /
+BACK -> BACK: check cookie
+opt user is not yet logged in
+    BACK -> FRONT: redirect
+    FRONT -> BACK: requests for /login
+    BACK -> FRONT: sends login.html
+    USER -> FRONT: clicks login in
+    FRONT -> BACK: /authorize
+    BACK -> FRONT: redirect
+    FRONT -> SPOTIFY: authorize access
+    USER -> SPOTIFY: authorizes app
+    opt user haven't authorized app yet
+        SPOTIFY -> FRONT: ask user to authorize
+        USER -> SPOTIFY: authorizes app
+    end
+    SPOTIFY -> FRONT: redirect
+    FRONT -> BACK: /callback
+    BACK -> BACK: cache access
+    BACK -> BACK: user logged in
+    BACK -> FRONT: redirect
+    FRONT -> BACK: requests for /
+end
+BACK -> BACK: check if user has access
+opt user doesn't have acccess
+    BACK -> FRONT: redirect
+    FRONT -> BACK: /authorize
+    BACK -> FRONT: redirect
+    FRONT -> SPOTIFY: authorize access
+    opt user haven't authorized app yet
+        SPOTIFY -> FRONT: ask user to authorize
+        USER -> SPOTIFY: authorizes app
+    end
+    SPOTIFY -> FRONT: redirect
+    FRONT -> BACK: /callback
+    BACK -> BACK: cache access
+    BACK -> BACK: user logged in
+    BACK -> FRONT: redirect
+    FRONT -> BACK: requests for /
+end
+BACK -> FRONT: sends index.html 
+loop 
+    FRONT -> BACK: validates that user is logged in and gets acccess token
+end
+
+
+
+
+
+@enduml
