@@ -9,11 +9,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "async": "^2.6.1",
+    "cookie-parser": "^1.4.3",
     "express": "^4.16.3",
     "express-session": "^1.15.6",
     "npm": "^6.4.1",
     "pino": "^5.4.0",
     "pino-pretty": "^2.0.1",
+    "request": "^2.88.0",
     "winston": "^3.0.0"
   }
 }

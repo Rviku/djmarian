@@ -1,52 +1,61 @@
-@startuml
+@startuml djmarian
 !include definitions/USER.puml
-!include definitions/DB.puml
 !include definitions/FRONT.puml
-!include definitions/SPOTIFY.puml
 !include definitions/BACK.puml
+!include definitions/DB.puml
+!include definitions/SPOTIFY.puml
+
+loop for every cached tokenJson
+    BACK -> SPOTIFY: refresh token
+    SPOTIFY -> BACK
+    alt result is OK
+        BACK -> BACK: update token
+    else
+        BACK -> BACK: delete token
+    end
+    BACK -> BACK: 30s delay
+end
 
 USER -> BACK: requests for /
 BACK -> BACK: check cookie
-opt user is not yet logged in
+BACK -> BACK: check if there is valid token
+opt user is not yet logged in || user doesnt have valid token
     BACK -> FRONT: redirect
     FRONT -> BACK: requests for /login
     BACK -> FRONT: sends login.html
     USER -> FRONT: clicks login in
-    FRONT -> BACK: /authorize
-    BACK -> FRONT: redirect
-    FRONT -> SPOTIFY: authorize access
-    USER -> SPOTIFY: authorizes app
-    opt user haven't authorized app yet
-        SPOTIFY -> FRONT: ask user to authorize
-        USER -> SPOTIFY: authorizes app
-    end
-    SPOTIFY -> FRONT: redirect
-    FRONT -> BACK: /callback
-    BACK -> BACK: cache access
-    BACK -> BACK: user logged in
-    BACK -> FRONT: redirect
-    FRONT -> BACK: requests for /
-end
-BACK -> BACK: check if user has access
-opt user doesn't have acccess
     BACK -> FRONT: redirect
     FRONT -> BACK: /authorize
     BACK -> FRONT: redirect
     FRONT -> SPOTIFY: authorize access
-    opt user haven't authorized app yet
+    opt user havent authorized app yet
         SPOTIFY -> FRONT: ask user to authorize
-        USER -> SPOTIFY: authorizes app
+        USER -> FRONT: authorizes app
+        FRONT -> SPOTIFY: magic happens
     end
     SPOTIFY -> FRONT: redirect
     FRONT -> BACK: /callback
-    BACK -> BACK: cache access
+    BACK -> SPOTIFY: get tokenJson
+    SPOTIFY -> BACK: send tokenJson
+    BACK -> SPOTIFY: get info about user using token
+    SPOTIFY -> BACK: response with user info
+    BACK -> BACK: associate userId with session
+    BACK -> BACK: cache {userId: tokenJson}
     BACK -> BACK: user logged in
     BACK -> FRONT: redirect
     FRONT -> BACK: requests for /
 end
 BACK -> FRONT: sends index.html 
 loop 
-    FRONT -> BACK: validates that user is logged in and gets acccess token
+    FRONT -> BACK: /checklogin
+    BACK -> BACK: validate cookie and get userId
+    BACK -> BACK: validate that there is valid token for user
+    alt there is valid token
+        BACK -> FRONT: response with access_token
+    else there isnt valid token
+        BACK -> FRONT: response with logout now
+    end
+    BACK -> BACK: 30s delay
 end
 
 

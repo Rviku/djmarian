@@ -1,0 +1,10 @@
+const config = {}
+config.clientId = ''
+config.clientSecret = ''
+config.sessionSecret = ''
+config.scopes = 'user-read-private user-read-email'
+config.host = 'localhost'
+config.port = 3000
+config.redirectUri = 
+
+module.exports = config
