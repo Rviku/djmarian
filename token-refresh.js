@@ -14,7 +14,7 @@ function refreshTokenAndWait(next) {
             .then(newTokenBody => {
                 updateCachedTokenForUser(newTokenBody, userId)
             }).catch(err => {
-                logErrorForRefreshingToken(err)
+                logErrorForRefreshingToken(err, userId)
             })
     })
     log.debug(`30s until next token refresh...`)
@@ -40,7 +40,7 @@ function updateCachedTokenForUser(newTokenBody, userId) {
     log.debug(`New access token: ${USER_ID_TOKEN_MAP[userId].access_token}, for user: ${userId}`)
 }
 
-function logErrorForRefreshingToken(err) {
+function logErrorForRefreshingToken(err, userId) {
     log.error(`Error occured while refreshing token for user: ${userId}: ${err}`)
 }
 
