@@ -3,51 +3,35 @@ const log = require('./logger')
 const path = require('path')
 const session = require('express-session')
 const cookieParser = require('cookie-parser')
-const request = require('request')
 const requestPromise = require('request-promise');
 const config = require('./config')
-const async = require("async")
+const tokenRefresh = require('./token-refresh')
+const async = require('async')
+
 const server = express()
 
 const REDIRECT_URI = `http://${config.host}:${config.port}/callback`
 const ENCODED_ID_PAIR = Buffer.from(
     `${config.clientId}:${config.clientSecret}`).toString('base64')
 const SAMPLE_STATE = 'sample-state123'
-const USER_ID_TOKEN_JSON_MAP = {}
+const USER_ID_TOKEN_JSON_MAP = tokenRefresh.USER_ID_TOKEN_MAP
 
-server.use(cookieParser())
-server.use(session(
-    {
-        secret: config.sessionSecret,
-        name: 'djmarian-cookie',
-        resave: true,
-        saveUninitialized: true
-    }
-))
+function initCookies() {
+    server.use(cookieParser())
+    server.use(session(
+        {
+            secret: config.sessionSecret,
+            name: 'djmarian-cookie',
+            resave: true,
+            saveUninitialized: true
+        }
+    ))
+}
 
-async.forever((next) => {
-    log.debug('Checking if there are any tokens to refresh...')
-    Object.keys(USER_ID_TOKEN_JSON_MAP).forEach((userId) => {
-        log.info(`Refreshing token for userId: ${userId}`)
-        requestPromise({
-            url: 'https://accounts.spotify.com/api/token',
-            form: {
-                grant_type: 'refresh_token',
-                refresh_token: USER_ID_TOKEN_JSON_MAP[userId].refresh_token
-            },
-            headers: {
-                Authorization: `Basic ${ENCODED_ID_PAIR}`
-            },
-            method: 'POST'
-        }).then(newTokenBody => {
-            USER_ID_TOKEN_JSON_MAP[userId].access_token = JSON.parse(newTokenBody).access_token
-            log.debug(`New access token: ${USER_ID_TOKEN_JSON_MAP[userId].access_token}, for user: ${userId}`)
-        }).catch(err => {
-            log.error(`Error occured while refreshing token for user: ${userId}: ${err}`)
-        })
-    })
-    log.debug(`30s until next token refresh...`)
-    setTimeout(() => next(), 30000)
+initCookies()
+
+async.forever(next => {
+    tokenRefresh.refreshTokenAndWait(next)
 })
 
 server.get('/ping', (req, res) => {
@@ -83,7 +67,7 @@ server.get('/callback', (req, res) => {
         })
         .then(userInfoBody => {
             log.debug(`User info body: ${userInfoBody}`)
-            var userInfoJson = JSON.parse(userInfoBody)
+            let userInfoJson = JSON.parse(userInfoBody)
             req.session.userId = userInfoJson.id
             USER_ID_TOKEN_JSON_MAP[userInfoJson.id] = tokenJson
             res.redirect('/')
@@ -104,7 +88,7 @@ server.get('/checklogin', (req, res) => {
 })
 
 server.get('/login', (req, res) => {
-    var redirect = `https://accounts.spotify.com/authorize\
+    let redirect = `https://accounts.spotify.com/authorize\
 ?response_type=code\
 &client_id=${config.clientId}\
 &scope=${encodeURIComponent(config.scopes)}\
