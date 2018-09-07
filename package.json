@@ -17,6 +17,7 @@
     "pino": "^5.4.0",
     "pino-pretty": "^2.0.1",
     "request": "^2.88.0",
+    "request-promise": "^4.2.2",
     "winston": "^3.0.0"
   }
 }

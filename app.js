@@ -4,9 +4,10 @@ const path = require('path')
 const session = require('express-session')
 const cookieParser = require('cookie-parser')
 const request = require('request')
+const requestPromise = require('request-promise');
 const config = require('./config')
 const async = require("async")
-var server = express()
+const server = express()
 
 const REDIRECT_URI = `http://${config.host}:${config.port}/callback`
 const ENCODED_ID_PAIR = Buffer.from(
@@ -28,23 +29,22 @@ async.forever((next) => {
     log.debug('Checking if there are any tokens to refresh...')
     Object.keys(USER_ID_TOKEN_JSON_MAP).forEach((userId) => {
         log.info(`Refreshing token for userId: ${userId}`)
-        async.waterfall([
-            (callback) => {
-                request.post({
-                    url: 'https://accounts.spotify.com/api/token',
-                    form: {
-                        grant_type: 'refresh_token',
-                        refresh_token: USER_ID_TOKEN_JSON_MAP[userId].refresh_token
-                    },
-                    headers: {
-                        Authorization: `Basic ${ENCODED_ID_PAIR}`
-                    }
-                }, (err, httpResponse, body) => callback(err, body))
+        requestPromise({
+            url: 'https://accounts.spotify.com/api/token',
+            form: {
+                grant_type: 'refresh_token',
+                refresh_token: USER_ID_TOKEN_JSON_MAP[userId].refresh_token
             },
-            (body) => {
-                USER_ID_TOKEN_JSON_MAP[userId].access_token = JSON.parse(body).access_token
-                log.debug(USER_ID_TOKEN_JSON_MAP[userId].access_token)
-        }], (err) => log.error(err))
+            headers: {
+                Authorization: `Basic ${ENCODED_ID_PAIR}`
+            },
+            method: 'POST'
+        }).then(newTokenBody => {
+            USER_ID_TOKEN_JSON_MAP[userId].access_token = JSON.parse(newTokenBody).access_token
+            log.debug(`New access token: ${USER_ID_TOKEN_JSON_MAP[userId].access_token}, for user: ${userId}`)
+        }).catch(err => {
+            log.error(`Error occured while refreshing token for user: ${userId}: ${err}`)
+        })
     })
     log.debug(`30s until next token refresh...`)
     setTimeout(() => next(), 30000)
@@ -55,63 +55,49 @@ server.get('/ping', (req, res) => {
     res.send('Pong!')
 })
 
-async.waterfall([
-    (callback) => {
-        server.get('/callback', (req, res) => {
-            var queryParams = req.query
-            var authorizationCode = queryParams.code
-            log.debug(authorizationCode)
-            log.debug(queryParams.state)
-            log.debug(queryParams.error)
-            log.debug(ENCODED_ID_PAIR)
-            callback(null, authorizationCode, req, res)
+server.get('/callback', (req, res) => {
+    let queryParams = req.query
+    let authorizationCode = queryParams.code
+    log.debug(`Authorization code: ${authorizationCode}`)
+    requestPromise({
+        url: 'https://accounts.spotify.com/api/token',
+        form: {
+            grant_type: 'authorization_code',
+            code: authorizationCode,
+            redirect_uri: REDIRECT_URI
+        },
+        headers: {
+            Authorization: `Basic ${ENCODED_ID_PAIR}`
+        },
+        method: 'POST'
+    }).then(tokenBody => {
+        log.debug(`Received token body: ${tokenBody}`)
+        return JSON.parse(tokenBody)
+    }).then(tokenJson => {
+        requestPromise({
+            url: 'https://api.spotify.com/v1/me',
+            headers: {
+                Authorization: `Bearer ${tokenJson.access_token}`
+            },
+            method: 'GET'
         })
-    },
-    (authorizationCode, req, res, callback) => {
-        request.post(
-            {
-                url: 'https://accounts.spotify.com/api/token',
-                form: {
-                    grant_type: 'authorization_code',
-                    code: authorizationCode,
-                    redirect_uri: REDIRECT_URI
-                },
-                headers: {
-                    Authorization: `Basic ${ENCODED_ID_PAIR}`
-                }
-            },
-            (err, httpResponse, body) => callback(err, body, req, res)
-        )
-    },
-    (body, req, res, callback) => {
-        var tokenJson = JSON.parse(body)
-        log.debug(tokenJson.access_token)
-        log.debug(tokenJson.token_type)
-        log.debug(tokenJson.scope)
-        log.debug(tokenJson.expires_in)
-        log.debug(tokenJson.refresh_token)
-        callback(null, tokenJson, req, res)
-    },
-    (tokenJson, req, res, callback) => {
-        request.get(
-            {
-                url: 'https://api.spotify.com/v1/me',
-                headers: {
-                    Authorization: `Bearer ${tokenJson.access_token}`
-                }
-            },
-            (err, httpResponse, body) => callback(err, body, req, res, tokenJson)
-        )
-    },
-    (body, req, res, tokenJson) => {
-        log.debug(body)
-        var selfInfoJson = JSON.parse(body)
-        log.debug(selfInfoJson.id)
-        req.session.userId = selfInfoJson.id
-        USER_ID_TOKEN_JSON_MAP[selfInfoJson.id] = tokenJson
-        res.redirect('/')
-    }
-], (err) => log.error(err))
+        .then(userInfoBody => {
+            log.debug(`User info body: ${userInfoBody}`)
+            var userInfoJson = JSON.parse(userInfoBody)
+            req.session.userId = userInfoJson.id
+            USER_ID_TOKEN_JSON_MAP[userInfoJson.id] = tokenJson
+            res.redirect('/')
+        })
+        .catchThrow(err => {
+            throw err
+        })
+    }).catch((err) => {
+        log.error(`Error occured while performing callback${err}`)
+        res.set('Content-Type', 'image/jpg')
+        let dir = path.join(__dirname, 'public', '500.png')
+        res.sendFile(dir)
+    })
+})
 
 server.get('/checklogin', (req, res) => {
     
@@ -129,13 +115,21 @@ server.get('/login', (req, res) => {
 })
 
 server.get('/', (req, res) => {
-    if (req.session.userId ||
-         USER_ID_TOKEN_JSON_MAP[req.session.userId]) {
-        
-        var dir = path.join(__dirname, 'public', 'index.html')
+    try {
+        log.debug(`Received new main page request from IP: ${req.ip} - Cookie: ${req.cookies['djmarian-cookie']}`)
+        if (req.session.userId ||
+            USER_ID_TOKEN_JSON_MAP[req.session.userId]) {
+            
+            let dir = path.join(__dirname, 'public', 'index.html')
+            res.sendFile(dir)
+        } else {
+            res.redirect('/login')
+        }
+    } catch (err) {
+        log.error(`Problem has occurred while requesting for main page: ${err}`)
+        res.set('Content-Type', 'image/jpg')
+        let dir = path.join(__dirname, 'public', '500.png')
         res.sendFile(dir)
-    } else {
-        res.redirect('/login')
     }
 })
 

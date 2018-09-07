@@ -5,3 +5,4 @@ combined.log
 config.js
 out/*
 .vscode
+angular-tour-of-heroes/*
