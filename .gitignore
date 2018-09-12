@@ -9,3 +9,4 @@ angular-tour-of-heroes/*
 dist/*
 .nyc_output/*
 coscos/*
+src/config/config.ts
