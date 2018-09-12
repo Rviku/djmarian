@@ -1,0 +1,33 @@
+class DJMarianConfig {
+    public encodedIdPair?: string
+    public redirectUri?: string
+    private constructor(
+        public clientId: string,
+        public clientSecret: string,
+        public sessionSecret: string,
+        public scopes?: string,
+        public host?: string,
+        public port?: number,
+        public tokenRefreshIntervalMs?: number) {
+            this.encodedIdPair = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
+            this.redirectUri = `http://${host}:${port}/callback`
+        }
+    public static create(config: DJMarianConfig) {
+        return new DJMarianConfig(
+            config.clientId,
+            config.clientSecret,
+            config.sessionSecret,
+            config.scopes ? config.scopes : 'user-read-private user-read-email',
+            config.host ? config.host : 'localhost',
+            config.port ? config.port : 3000,
+            config.tokenRefreshIntervalMs ? config.tokenRefreshIntervalMs : 30000)
+    }    
+}
+
+const config: DJMarianConfig = DJMarianConfig.create({
+    clientId: '',
+    clientSecret: '',
+    sessionSecret: ''
+})
+
+export default config

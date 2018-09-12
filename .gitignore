@@ -6,3 +6,6 @@ config.js
 out/*
 .vscode
 angular-tour-of-heroes/*
+dist/*
+.nyc_output/*
+coscos/*

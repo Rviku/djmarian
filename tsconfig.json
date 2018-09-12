@@ -1,0 +1,24 @@
+{ 
+    "compilerOptions": { 
+        "allowJs": true,
+        "outDir": "./dist",
+        "target": "es6",
+        "moduleResolution": "node",
+        "module": "commonjs"
+    },
+    "exclude": [
+        "node_modules",
+        "dist",
+        ".vscode",
+        "docs",
+        "design",
+        "public",
+        "angular-tour-of-heroes",
+        "coscos",
+        ".nyc_output",
+        "out"
+    ],
+    "include": [
+        "./src/"
+    ]
+} 
